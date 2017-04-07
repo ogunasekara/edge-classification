@@ -19,8 +19,10 @@ class NeuralNetwork:
         self.saver = None
         self.save_path = "./trained_networks/edge_classification"
 
-        self.frames = None # will turn into np.array after preprocess
-        self.labels = None # will turn into np.array after preprocess
+        self.frames = None # will turn into np.array after pre_process
+        self.labels = None # will turn into np.array after pre_process
+        self.frame_batches = None # filled by create_batches
+        self.label_batches = None
         self.weights = None
         self.frame_shape = frame_shape
 
@@ -90,6 +92,9 @@ class NeuralNetwork:
         x = tf.nn.relu(x)
 
         return x
+
+    def create_batches(self, batch_size):
+        pass
 
     def fully_connected(self, x_tensor, num_outputs):
         """
