@@ -26,7 +26,7 @@ def convert_images(input_dir, output_dir):
         print("Successfully converted image: %s" % (count))
 
 def normalize_frame(frame):
-    filter_frame = np.zeros([480,640,3])
+    filter_frame = np.zeros([480, 640, 3])
 
     for c in range(3):
         max_v = np.max(frame[:, :, c])
@@ -38,7 +38,7 @@ def normalize_frame(frame):
 
 def pre_process_images(dir, label):
     """
-    puts all the images 
+    puts all the images into batches
     :param dir: directory of images 
     :param label: desired label used for neural network 
     :return: list in form [image, label]

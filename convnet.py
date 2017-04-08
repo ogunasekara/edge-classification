@@ -1,5 +1,9 @@
+import os
+import cv2
+
 import tensorflow as tf
 import numpy as np
+
 
 class NeuralNetwork:
     def __init__(self, frames_and_labels, frame_shape, trained=False, epochs=80):
@@ -21,10 +25,12 @@ class NeuralNetwork:
 
         self.frames = None # will turn into np.array after pre_process
         self.labels = None # will turn into np.array after pre_process
-        self.frame_batches = None # filled by create_batches
-        self.label_batches = None
         self.weights = None
         self.frame_shape = frame_shape
+        self.batch_size = 50
+
+        self.frame_queue = []
+        self.label_queue = []
 
         self.trained = trained
 
@@ -39,10 +45,26 @@ class NeuralNetwork:
         test_frames = np.float32(frames)
         self.run_network(test_frames)
 
+    # def pre_process(self, dir_good, dir_bad):
+    #     frames_and_labels = []
+    #
+    #     for entry in os.listdir(dir_good):
+    #         path = "%s/%s" % (dir_good, entry)
+    #         frames_and_labels.append([path, 1])
+    #     for entry in os.listdir(dir_bad):
+    #         path = "%s/%s" % (dir_bad, entry)
+    #         frames_and_labels.append([entry, 0])
+    #
+    #     np.random.seed(1)
+    #     shuffled_frames = list(np.random.shuffle(np.array(frames_and_labels)))
+    #     for frame_and_label in shuffled_frames:
+    #         self.frame_queue += shuffled_frames[0]
+    #         self.label_queue += shuffled_frames[1]
+
     def pre_process(self, frames_and_labels):
         """
         Normalizes the frame through with respect to each channel
-        
+
         :param frames_and_labels: list with frames and labels
         :return: list which can easily be put into tf.placeholder object
         """
@@ -65,6 +87,15 @@ class NeuralNetwork:
 
         self.frames = np.float32(frames)
         self.labels = np.float32(labels)
+
+        # min_after_dequeue = 10000
+        # capacity = min_after_dequeue + 3 * self.batch_size
+        # for frame, label in zip(frames, labels):
+        #     frame_batch, label_batch = tf.train.shuffle_batch([self.frames, self.labels],
+        #                                                         batch_size=self.batch_size,
+        #                                                         capacity=capacity,
+        #                                                         min_after_dequeue=min_after_dequeue)
+        # self.frame_batch = frame_batch
 
     def conv2d(self, x_tensor, conv_num_outputs, conv_ksize, conv_strides):
         """
@@ -147,18 +178,46 @@ class NeuralNetwork:
         if not self.trained:
             with tf.Session() as sess:
                 sess.run(tf.global_variables_initializer())
-                print(self.epochs)
-                for epoch in range(self.epochs):
-                    # for frame, label in zip(self.frames, self.labels):
-                    #     optimizer.run(feed_dict={input:frame, label:label, keep_prob:self.keep_prob})
-                    sess.run(optimizer, feed_dict={x:self.frames,
-                                                   y:self.labels,
-                                                   keep_prob:self.keep_prob,
-                                                   })
-                    print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
-                                                                                   y:self.labels,
-                                                                                   keep_prob:self.keep_prob,
-                                                                                  })))
+                print("Number of epochs: %s" % (self.epochs))
+                number_batches = int(len(self.frames) / self.batch_size)
+                print("Number of batches: %s" % (number_batches))
+
+                batch_init = 0
+                batch_end = self.batch_size
+                data_size = len(self.frames)
+
+                for batch in range(number_batches):
+                # for train_frame, train_label in zip(train_frames, train_labels):
+                    if data_size - batch_init < self.batch_size:
+                        batch_end = data_size
+                    train_frames = self.frames[batch_init:batch_end]
+                    train_labels = self.labels[batch_init:batch_end]
+
+                    print("----- Batch %s -----" % (batch+1))
+                    for epoch in range(self.epochs):
+                        # for frame, label in zip(self.frames, self.labels):
+                        #     optimizer.run(feed_dict={input:frame, label:label, keep_prob:self.keep_prob})
+
+
+                        sess.run(optimizer, feed_dict={x:train_frames,
+                                                       y:train_labels,
+                                                       keep_prob:self.keep_prob,
+                                                       })
+
+                        # sess.run(optimizer, feed_dict={x: self.frames,
+                        #                                y: self.labels,
+                        #                                keep_prob: self.keep_prob,
+                        #                                })
+                        # print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
+                        #                                                                y:self.labels,
+                        #                                                                keep_prob:self.keep_prob,
+                        #                                                               })))
+                        print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:train_frames,
+                                                                                        y:train_labels,
+                                                                                        keep_prob: self.keep_prob,
+                                                                                      })))
+                    batch_init += 50
+                    batch_end += 50
                 # Save Model
                 self.saver = tf.train.Saver()
                 self.saver.save(sess, self.save_path)
@@ -200,8 +259,4 @@ class NeuralNetwork:
 
         return value
 
-    #TODO: IMPLEMENT THIS FUNCTION TO UPDATE WEIGHTS WITH NEW DATA (5-10 epochs)
-    def retrain_network(self, epochs, frames_and_labels):
-        self.preprocess(frames_and_labels)
-
-        pass
+    #TODO: Implement retrain function for training on the go
