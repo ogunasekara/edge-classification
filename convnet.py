@@ -6,7 +6,7 @@ import numpy as np
 
 
 class NeuralNetwork:
-    def __init__(self, frames_and_labels, frame_shape, trained=False, epochs=80):
+    def __init__(self, good_dir, bad_dir, frame_shape, trained=False, epochs=80):
         """
         Initializes a simple convolution network for proper edge classification
         
@@ -16,7 +16,7 @@ class NeuralNetwork:
         :param epochs: number of epochs to run the training
         """
         # Hyperparameters
-        self.learning_rate = 0.001
+        self.learning_rate = 0.0001
         self.epochs = epochs
         self.keep_prob = 0.9
 
@@ -27,15 +27,14 @@ class NeuralNetwork:
         self.labels = None # will turn into np.array after pre_process
         self.weights = None
         self.frame_shape = frame_shape
-        self.batch_size = 50
+        self.batch_size = 40
 
-        self.frame_queue = []
-        self.label_queue = []
+        self.frame_label_queue = []
 
         self.trained = trained
 
         # pre-process frames
-        self.pre_process(frames_and_labels)
+        self.pre_process(good_dir, bad_dir)
 
         # train network if not trained
         if not self.trained:
@@ -45,23 +44,34 @@ class NeuralNetwork:
         test_frames = np.float32(frames)
         self.run_network(test_frames)
 
-    # def pre_process(self, dir_good, dir_bad):
-    #     frames_and_labels = []
-    #
-    #     for entry in os.listdir(dir_good):
-    #         path = "%s/%s" % (dir_good, entry)
-    #         frames_and_labels.append([path, 1])
-    #     for entry in os.listdir(dir_bad):
-    #         path = "%s/%s" % (dir_bad, entry)
-    #         frames_and_labels.append([entry, 0])
-    #
-    #     np.random.seed(1)
-    #     shuffled_frames = list(np.random.shuffle(np.array(frames_and_labels)))
-    #     for frame_and_label in shuffled_frames:
-    #         self.frame_queue += shuffled_frames[0]
-    #         self.label_queue += shuffled_frames[1]
+    def normalize(self, frame):
+        filter_frame = np.zeros([480, 640, 3])
 
-    def pre_process(self, frames_and_labels):
+        for c in range(3):
+            max_v = np.max(frame[:, :, c])
+            min_v = np.min(frame[:, :, c])
+            # filter_frame[:, :, c] = (frame[:, :, c] - min_v) / (max_v - min_v)
+            filter_frame[:, :, c] = frame[:, :, c] / 255
+
+        return filter_frame
+
+    def pre_process(self, dir_good, dir_bad):
+        frames_and_labels = []
+
+        for entry in os.listdir(dir_good):
+            path = "%s/%s" % (dir_good, entry)
+            frames_and_labels.append([path, 1])
+
+        for entry in os.listdir(dir_bad):
+            path = "%s/%s" % (dir_bad, entry)
+            frames_and_labels.append([path, 0])
+
+        np.random.seed(1)
+        shuffled = np.array(frames_and_labels)
+        np.random.shuffle(shuffled)
+        self.frame_label_queue = shuffled.tolist()
+
+    def process(self, frames_and_labels):
         """
         Normalizes the frame through with respect to each channel
 
@@ -69,18 +79,25 @@ class NeuralNetwork:
         :return: list which can easily be put into tf.placeholder object
         """
         #shuffle the frames
-        np.random.seed(1)
-        shuffled_frames = np.array(frames_and_labels)
-        np.random.shuffle(shuffled_frames)
-        shuffled_frames = shuffled_frames.tolist()
+        self.frames = None
+        self.labels = None
+
+        # shuffle the frames
+        # np.random.seed(1)
+        # shuffled_frames = np.array(frames_and_labels)
+        # np.random.shuffle(shuffled_frames)
+        # shuffled_frames = shuffled_frames.tolist()
 
         # normalize the frame
         frames = []
         labels = []
 
-        for frame_and_label in shuffled_frames:
+        for frame_and_label in frames_and_labels:
             frame = frame_and_label[0]
             label = [frame_and_label[1]]
+
+            frame = cv2.imread(frame)
+            frame = self.normalize(frame)
 
             frames.append(frame)
             labels.append(label)
@@ -97,7 +114,7 @@ class NeuralNetwork:
         #                                                         min_after_dequeue=min_after_dequeue)
         # self.frame_batch = frame_batch
 
-    def conv2d(self, x_tensor, conv_num_outputs, conv_ksize, conv_strides):
+    def conv2d(self, x_tensor, conv_num_outputs, conv_ksize, conv_strides, pool_ksize, pool_strides):
         """
         Apply convolution then max pooling to x_tensor
         :param x_tensor: TensorFlow Tensor
@@ -121,6 +138,11 @@ class NeuralNetwork:
         x = tf.nn.conv2d(x_tensor, W1, strides=conv_strides, padding='SAME')
         x = tf.nn.bias_add(x, b1)
         x = tf.nn.relu(x)
+
+        # define max_strides, ksize_shape
+        pool_strides = [1] + list(pool_strides) + [1]
+        pool_ksize = [1] + list(pool_ksize) + [1]
+        x = tf.nn.max_pool(x, ksize=pool_ksize, strides=pool_strides, padding='SAME')
 
         return x
 
@@ -156,13 +178,15 @@ class NeuralNetwork:
         test = tf.multiply(x, two, name="test")
 
         # Convolution
-        output = self.conv2d(x, 32, (3, 3), (1, 1))
-        # output = self.conv2d(output, 32, (3, 3), (1, 1))
+        output = self.conv2d(x, 32, (3, 3), (1, 1), (2,2), (2,2))
+        output = self.conv2d(output, 64, (3, 3), (1, 1), (2, 2), (2, 2))
+        
         output = tf.nn.dropout(output, keep_prob)
+
         output = tf.contrib.layers.flatten(output)
 
         # Fully Connected Layer
-        # output = self.fully_connected(output, 20)
+        output = self.fully_connected(output, 20)
         output = self.fully_connected(output, 1)
         output = tf.identity(output, name="output")
 
@@ -179,41 +203,30 @@ class NeuralNetwork:
             with tf.Session() as sess:
                 sess.run(tf.global_variables_initializer())
                 print("Number of epochs: %s" % (self.epochs))
-                number_batches = int(len(self.frames) / self.batch_size)
+                number_batches = int(len(self.frame_label_queue) / self.batch_size)
                 print("Number of batches: %s" % (number_batches))
 
                 batch_init = 0
                 batch_end = self.batch_size
-                data_size = len(self.frames)
+                data_size = len(self.frame_label_queue)
 
                 for batch in range(number_batches):
                 # for train_frame, train_label in zip(train_frames, train_labels):
                     if data_size - batch_init < self.batch_size:
                         batch_end = data_size
-                    train_frames = self.frames[batch_init:batch_end]
-                    train_labels = self.labels[batch_init:batch_end]
+
+                    self.process(self.frame_label_queue[batch_init:batch_end])
 
                     print("----- Batch %s -----" % (batch+1))
                     for epoch in range(self.epochs):
-                        # for frame, label in zip(self.frames, self.labels):
-                        #     optimizer.run(feed_dict={input:frame, label:label, keep_prob:self.keep_prob})
 
-
-                        sess.run(optimizer, feed_dict={x:train_frames,
-                                                       y:train_labels,
+                        sess.run(optimizer, feed_dict={x:self.frames,
+                                                       y:self.labels,
                                                        keep_prob:self.keep_prob,
                                                        })
 
-                        # sess.run(optimizer, feed_dict={x: self.frames,
-                        #                                y: self.labels,
-                        #                                keep_prob: self.keep_prob,
-                        #                                })
-                        # print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
-                        #                                                                y:self.labels,
-                        #                                                                keep_prob:self.keep_prob,
-                        #                                                               })))
-                        print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:train_frames,
-                                                                                        y:train_labels,
+                        print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
+                                                                                        y:self.labels,
                                                                                         keep_prob: self.keep_prob,
                                                                                       })))
                     batch_init += 50
@@ -225,11 +238,6 @@ class NeuralNetwork:
             self.trained = True
 
     def run_network(self, test_frames):
-        # frames = []
-        # for test_frame in test_frames:
-        #     frames.append([test_frame])
-        # frames = np.float32(frames)
-        # print(frames.shape)
 
         frames = np.resize(test_frames, tuple([1] + list(self.frame_shape)))
         # tf.reset_default_graph()
@@ -242,17 +250,8 @@ class NeuralNetwork:
 
             # load tensors
             loaded_x = loaded_graph.get_tensor_by_name('input:0')
-            loaded_test = loaded_graph.get_tensor_by_name('test:0')
             loaded_keep_prob = loaded_graph.get_tensor_by_name('keep_prob:0')
             loaded_output = loaded_graph.get_tensor_by_name('output:0')
-            # value = 0
-            # counter = 0
-            # for test_frame in self.test_frames:
-            #     value += sess.run(loaded_output, feed_dict={loaded_x: test_frame,
-            #                                                loaded_keep_prob: 1.0})
-            #     counter += 1
-            # print(sess.run(test, feed_dict={loaded_x: self.test_frames,
-            #                                                loaded_keep_prob: 1.0}))
 
             value = sess.run(loaded_output, feed_dict={loaded_x: frames,
                                                 loaded_keep_prob: 1.0})
