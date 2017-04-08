@@ -30,4 +30,4 @@ if __name__ == '__main__':
         convert_images("images_good_raw", "images_good")
         convert_images("images_bad_raw", "images_bad")
 
-    network = NeuralNetwork("images_good", "images_bad", (240,320,3), trained=False, epochs=20)
+    network = NeuralNetwork("images_good", "images_bad", (240,320,3), trained=False, epochs=30)

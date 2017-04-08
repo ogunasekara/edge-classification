@@ -21,7 +21,7 @@ class NeuralNetwork:
         self.keep_prob = 0.9
 
         self.saver = None
-        self.save_path = "./trained_networks/edge_classification"
+        self.save_path = "./trained_networks/edge_classification_small"
 
         self.frames = None # will turn into np.array after pre_process
         self.labels = None # will turn into np.array after pre_process
@@ -48,8 +48,6 @@ class NeuralNetwork:
         filter_frame = np.zeros(list(self.frame_shape))
 
         for c in range(3):
-            max_v = np.max(frame[:, :, c])
-            min_v = np.min(frame[:, :, c])
             filter_frame[:, :, c] = frame[:, :, c] / 255
 
         return filter_frame
@@ -158,20 +156,18 @@ class NeuralNetwork:
         x = tf.placeholder(tf.float32, shape=[None] + list(self.frame_shape), name="input")
         y = tf.placeholder(tf.float32, shape=[None, 1] , name="y")
         keep_prob = tf.placeholder(tf.float32, name="keep_prob")
-        two = tf.constant(2.0)
-
-        test = tf.multiply(x, two, name="test")
 
         # Convolution
-        output = self.conv2d(x, 32, (3, 3), (1, 1), (2,2), (2,2))
-        output = self.conv2d(output, 64, (3, 3), (1, 1), (2, 2), (2, 2))
+        # output = self.conv2d(x, 32, (3, 3), (1, 1), (2,2), (2,2))
+        # output = self.conv2d(output, 64, (3, 3), (1, 1), (2, 2), (2, 2))
+        output = self.conv2d(x, 7, (3, 3), (1, 1), (2, 2), (2, 2))
         
         output = tf.nn.dropout(output, keep_prob)
 
         output = tf.contrib.layers.flatten(output)
 
         # Fully Connected Layer
-        output = self.fully_connected(output, 20)
+        output = self.fully_connected(output, 10)
         output = self.fully_connected(output, 1)
         output = tf.identity(output, name="output")
 
