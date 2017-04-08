@@ -6,7 +6,7 @@ import numpy as np
 
 
 class NeuralNetwork:
-    def __init__(self, good_dir, bad_dir, frame_shape, trained=False, epochs=80):
+    def __init__(self, good_dir, bad_dir, frame_shape, trained=False, epochs=20):
         """
         Initializes a simple convolution network for proper edge classification
         
@@ -25,7 +25,7 @@ class NeuralNetwork:
 
         self.frames = None # will turn into np.array after pre_process
         self.labels = None # will turn into np.array after pre_process
-        self.weights = None
+
         self.frame_shape = frame_shape
         self.batch_size = 40
 
@@ -45,12 +45,11 @@ class NeuralNetwork:
         self.run_network(test_frames)
 
     def normalize(self, frame):
-        filter_frame = np.zeros([480, 640, 3])
+        filter_frame = np.zeros(list(self.frame_shape))
 
         for c in range(3):
             max_v = np.max(frame[:, :, c])
             min_v = np.min(frame[:, :, c])
-            # filter_frame[:, :, c] = (frame[:, :, c] - min_v) / (max_v - min_v)
             filter_frame[:, :, c] = frame[:, :, c] / 255
 
         return filter_frame
@@ -82,12 +81,6 @@ class NeuralNetwork:
         self.frames = None
         self.labels = None
 
-        # shuffle the frames
-        # np.random.seed(1)
-        # shuffled_frames = np.array(frames_and_labels)
-        # np.random.shuffle(shuffled_frames)
-        # shuffled_frames = shuffled_frames.tolist()
-
         # normalize the frame
         frames = []
         labels = []
@@ -97,22 +90,14 @@ class NeuralNetwork:
             label = [frame_and_label[1]]
 
             frame = cv2.imread(frame)
-            frame = self.normalize(frame)
-
-            frames.append(frame)
-            labels.append(label)
+            
+            if frame.shape == self.frame_shape:
+                frame = self.normalize(frame)
+                frames.append(frame)
+                labels.append(label)
 
         self.frames = np.float32(frames)
         self.labels = np.float32(labels)
-
-        # min_after_dequeue = 10000
-        # capacity = min_after_dequeue + 3 * self.batch_size
-        # for frame, label in zip(frames, labels):
-        #     frame_batch, label_batch = tf.train.shuffle_batch([self.frames, self.labels],
-        #                                                         batch_size=self.batch_size,
-        #                                                         capacity=capacity,
-        #                                                         min_after_dequeue=min_after_dequeue)
-        # self.frame_batch = frame_batch
 
     def conv2d(self, x_tensor, conv_num_outputs, conv_ksize, conv_strides, pool_ksize, pool_strides):
         """
@@ -215,6 +200,10 @@ class NeuralNetwork:
                     if data_size - batch_init < self.batch_size:
                         batch_end = data_size
 
+                    if batch_end - batch_init == 0:
+                        break
+
+                    print(len(self.frame_label_queue[batch_init:batch_end]))
                     self.process(self.frame_label_queue[batch_init:batch_end])
 
                     print("----- Batch %s -----" % (batch+1))
@@ -229,17 +218,17 @@ class NeuralNetwork:
                                                                                         y:self.labels,
                                                                                         keep_prob: self.keep_prob,
                                                                                       })))
-                    batch_init += 50
-                    batch_end += 50
+                    batch_init += self.batch_size
+                    batch_end += self.batch_size
                 # Save Model
                 self.saver = tf.train.Saver()
                 self.saver.save(sess, self.save_path)
 
             self.trained = True
 
-    def run_network(self, test_frames):
+    def run_network(self, test_frame):
 
-        frames = np.resize(test_frames, tuple([1] + list(self.frame_shape)))
+        frames = np.resize(test_frame, tuple([1] + list(self.frame_shape)))
         # tf.reset_default_graph()
 
         loaded_graph = tf.Graph()

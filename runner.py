@@ -25,9 +25,9 @@ def convert_images(input_dir, output_dir):
         print("Successfully converted image: %s" % (count))
 
 if __name__ == '__main__':
-    converted = False
+    converted = True
     if not converted:
         convert_images("images_good_raw", "images_good")
         convert_images("images_bad_raw", "images_bad")
 
-    network = NeuralNetwork("images_good", "images_bad", (240,320,3), trained=False, epochs=80)
+    network = NeuralNetwork("images_good", "images_bad", (240,320,3), trained=False, epochs=20)
