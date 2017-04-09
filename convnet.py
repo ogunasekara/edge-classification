@@ -160,14 +160,15 @@ class NeuralNetwork:
         # Convolution
         # output = self.conv2d(x, 32, (3, 3), (1, 1), (2,2), (2,2))
         # output = self.conv2d(output, 64, (3, 3), (1, 1), (2, 2), (2, 2))
-        output = self.conv2d(x, 7, (3, 3), (1, 1), (2, 2), (2, 2))
+        output = self.conv2d(x, 5, (3, 3), (1, 1), (2, 2), (2, 2))
+        output = self.conv2d(output, 10, (3, 3), (2, 2), (2, 2), (2, 2))
         
         output = tf.nn.dropout(output, keep_prob)
 
         output = tf.contrib.layers.flatten(output)
 
         # Fully Connected Layer
-        output = self.fully_connected(output, 10)
+        output = self.fully_connected(output, 15)
         output = self.fully_connected(output, 1)
         output = tf.identity(output, name="output")
 
@@ -187,38 +188,41 @@ class NeuralNetwork:
                 number_batches = int(len(self.frame_label_queue) / self.batch_size)
                 print("Number of batches: %s" % (number_batches))
 
-                batch_init = 0
-                batch_end = self.batch_size
                 data_size = len(self.frame_label_queue)
 
-                for batch in range(number_batches):
-                # for train_frame, train_label in zip(train_frames, train_labels):
-                    if data_size - batch_init < self.batch_size:
-                        batch_end = data_size
+                repeat_size = 3
 
-                    if batch_end - batch_init == 0:
-                        break
+                for _ in range(repeat_size):
+                    batch_init = 0
+                    batch_end = self.batch_size
+                    for batch in range(number_batches):
+                    # for train_frame, train_label in zip(train_frames, train_labels):
+                        if data_size - batch_init < self.batch_size:
+                            batch_end = data_size
 
-                    print(len(self.frame_label_queue[batch_init:batch_end]))
-                    self.process(self.frame_label_queue[batch_init:batch_end])
+                        if batch_end - batch_init == 0:
+                            break
 
-                    print("----- Batch %s -----" % (batch+1))
-                    for epoch in range(self.epochs):
+                        print(len(self.frame_label_queue[batch_init:batch_end]))
+                        self.process(self.frame_label_queue[batch_init:batch_end])
 
-                        sess.run(optimizer, feed_dict={x:self.frames,
-                                                       y:self.labels,
-                                                       keep_prob:self.keep_prob,
-                                                       })
+                        print("----- Batch %s -----" % (batch+1))
+                        for epoch in range(self.epochs):
 
-                        print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
-                                                                                        y:self.labels,
-                                                                                        keep_prob: self.keep_prob,
-                                                                                      })))
-                    batch_init += self.batch_size
-                    batch_end += self.batch_size
-                # Save Model
-                self.saver = tf.train.Saver()
-                self.saver.save(sess, self.save_path)
+                            sess.run(optimizer, feed_dict={x:self.frames,
+                                                           y:self.labels,
+                                                           keep_prob:self.keep_prob,
+                                                           })
+
+                            print("Epoch: %s Error: %s" % (epoch, sess.run(cost, feed_dict={x:self.frames,
+                                                                                            y:self.labels,
+                                                                                            keep_prob: self.keep_prob,
+                                                                                          })))
+                        batch_init += self.batch_size
+                        batch_end += self.batch_size
+                    # Save Model
+                    self.saver = tf.train.Saver()
+                    self.saver.save(sess, self.save_path)
 
             self.trained = True
 
