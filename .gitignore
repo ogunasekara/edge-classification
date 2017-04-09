@@ -1,6 +1,4 @@
-images_good_raw/
-images_bad_raw/
-images_good/
-images_bad/
+images_good*/
+images_bad*/
 __pycache__/
 .idea/
